@@ -81,7 +81,7 @@ class DDPMCDPipeline(nn.Module):
     def from_pretrained(
         cls,
         diffusion_ckpt: str,
-        cd_gen_path: str,
+        cd_model_path: str,
         feat_scales: List[int],
         block_out_channels: Sequence[int],
         out_channels: int = 2,
@@ -97,7 +97,7 @@ class DDPMCDPipeline(nn.Module):
         diffusion_ckpt:
             Directory produced by
             :meth:`~src.models.diffusion_extractor.DiffusionFeatureExtractor.save_pretrained`.
-        cd_gen_path:
+        cd_model_path:
             Path prefix for the CD model weights, e.g.
             ``"experiments/run/checkpoint/best_cd_model"``
             (the loader appends ``"_gen.pth"``).
@@ -124,7 +124,7 @@ class DDPMCDPipeline(nn.Module):
             time_steps=time_steps,
         ).to(_device)
 
-        gen_path = f"{cd_gen_path}_gen.pth"
+        gen_path = f"{cd_model_path}_gen.pth"
         head.load_state_dict(torch.load(gen_path, map_location=_device))
         logger.info("Loaded CD head from %s", gen_path)
 

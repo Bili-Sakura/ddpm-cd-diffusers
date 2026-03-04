@@ -77,12 +77,14 @@ class CDDataset(Dataset):
         name = self.img_names[index % self.data_len]
         img_A = Image.open(os.path.join(self.root_dir, IMG_FOLDER_NAME, name)).convert("RGB")
         img_B = Image.open(os.path.join(self.root_dir, IMG_POST_FOLDER_NAME, name)).convert("RGB")
-        lbl = Image.open(os.path.join(self.root_dir, ANNOT_FOLDER_NAME, name)).convert("RGB")
+        # Load label as grayscale to avoid the extra channel-extraction step
+        lbl = Image.open(os.path.join(self.root_dir, ANNOT_FOLDER_NAME, name)).convert("L")
 
         img_A = transform_augment_cd(img_A, split=self.split, min_max=(-1, 1))
         img_B = transform_augment_cd(img_B, split=self.split, min_max=(-1, 1))
         lbl = transform_augment_cd(lbl, split=self.split, min_max=(0, 1))
+        # Squeeze the single channel dimension to get a 2-D label tensor
         if lbl.dim() > 2:
-            lbl = lbl[0]
+            lbl = lbl.squeeze(0)
 
         return {"A": img_A, "B": img_B, "L": lbl, "Index": index}

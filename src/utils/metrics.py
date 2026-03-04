@@ -54,7 +54,7 @@ def tensor2img(
     return img_np.astype(out_type)
 
 
-def save_img(img: np.ndarray, img_path: str, mode: str = "RGB") -> None:
+def save_img(img: np.ndarray, img_path: str) -> None:
     """Save an HWC RGB NumPy array to disk."""
     os.makedirs(os.path.dirname(img_path) or ".", exist_ok=True)
     cv2.imwrite(img_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))

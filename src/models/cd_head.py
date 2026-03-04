@@ -216,12 +216,13 @@ class ChangeDetectionHead(nn.Module):
             if isinstance(layer, Block):
                 scale = self.feat_scales[lvl]
 
-                # Gather features across all timesteps, concatenating on channel dim
-                f_A = feats_A[0][scale]
-                f_B = feats_B[0][scale]
-                for t_i in range(1, len(self.time_steps)):
-                    f_A = torch.cat((f_A, feats_A[t_i][scale]), dim=1)
-                    f_B = torch.cat((f_B, feats_B[t_i][scale]), dim=1)
+                # Gather features across all timesteps via a single cat call
+                f_A = torch.cat(
+                    [feats_A[t_i][scale] for t_i in range(len(self.time_steps))], dim=1
+                )
+                f_B = torch.cat(
+                    [feats_B[t_i][scale] for t_i in range(len(self.time_steps))], dim=1
+                )
 
                 diff = torch.abs(layer(f_A) - layer(f_B))
                 if lvl != 0 and x is not None:

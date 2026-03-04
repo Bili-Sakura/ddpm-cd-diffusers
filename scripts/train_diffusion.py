@@ -45,8 +45,8 @@ def main() -> None:
         help="Path to YAML configuration file.",
     )
     parser.add_argument(
-        "-p", "--phase", type=str, choices=["train", "val"], default="train",
-        help="'train' runs the training loop; 'val' samples from a saved model.",
+        "-p", "--phase", type=str, choices=["train"], default="train",
+        help="Training phase (only 'train' is supported; use DDPMPipeline for inference).",
     )
     parser.add_argument("-gpu", "--gpu_ids", type=str, default=None)
     parser.add_argument("-debug", "-d", action="store_true")
