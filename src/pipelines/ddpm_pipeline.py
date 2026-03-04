@@ -143,7 +143,7 @@ class GaussianDiffusion(nn.Module):
     @torch.no_grad()
     def p_sample_loop(self, in_channels, img_size, continous=False):
         device = self.scheduler.alphas_cumprod.device
-        sample_inter = (1 | (self.num_timesteps // 10))
+        sample_inter = max(1, self.num_timesteps // 10)
 
         img = torch.randn((1, in_channels, img_size, img_size), device=device)
         ret_img = img

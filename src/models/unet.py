@@ -265,7 +265,7 @@ class UNet(nn.Module):
         if feat_need:
             fd = []
 
-        # Diffiusion decoder
+        # Diffusion decoder
         for layer in self.ups:
             if isinstance(layer, ResnetBlocWithAttn):
                 x = layer(torch.cat((x, feats.pop()), dim=1), t)
