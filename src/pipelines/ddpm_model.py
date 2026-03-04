@@ -170,9 +170,6 @@ class DDPM(BaseModel):
                 network = network.module
             network.load_state_dict(torch.load(
                 gen_path), strict=(not self.opt['model']['finetune_norm']))
-
-            network.load_state_dict(torch.load(
-                gen_path), strict=False)
                 
             if self.opt['phase'] == 'train':
                 #optimizer

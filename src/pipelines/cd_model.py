@@ -113,9 +113,9 @@ class CD(BaseModel):
         
         if is_best_model:
             best_cd_gen_path = os.path.join(
-                self.opt['path']['checkpoint'], 'best_cd_model_gen.pth'.format(epoch))
+                self.opt['path']['checkpoint'], 'best_cd_model_gen.pth')
             best_cd_opt_path = os.path.join(
-                self.opt['path']['checkpoint'], 'best_cd_model_opt.pth'.format(epoch))
+                self.opt['path']['checkpoint'], 'best_cd_model_opt.pth')
 
         # Save CD model pareamters
         network = self.netCD
