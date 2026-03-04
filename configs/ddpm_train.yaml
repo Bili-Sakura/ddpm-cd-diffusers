@@ -1,0 +1,63 @@
+# DDPM pre-training configuration
+# Train an unconditional DDPM on remote-sensing images using diffusers.
+
+name: ddpm-RS-Unet
+phase: train          # train | val
+gpu_ids: [0]
+
+path:
+  log: logs
+  tb_logger: tb_logger
+  results: results
+  checkpoint: checkpoint
+  resume_state: null  # Set to "<experiments_dir>/checkpoint/unet" to resume
+
+datasets:
+  train:
+    name: LEVIR-WHU-DSIFN
+    dataroot: dataset/LEVIR-WHU-DSIFN
+    resolution: 256
+    batch_size: 8
+    num_workers: 4
+    use_shuffle: true
+    data_len: -1        # -1 = use all available images
+
+model:
+  # Diffusers UNet2DModel architecture
+  unet:
+    sample_size: 256
+    in_channels: 3
+    out_channels: 3
+    layers_per_block: 2
+    block_out_channels: [128, 256, 512, 1024, 1024]
+    down_block_types:
+      - DownBlock2D
+      - DownBlock2D
+      - AttnDownBlock2D
+      - AttnDownBlock2D
+      - AttnDownBlock2D
+    up_block_types:
+      - AttnUpBlock2D
+      - AttnUpBlock2D
+      - AttnUpBlock2D
+      - UpBlock2D
+      - UpBlock2D
+    norm_num_groups: 32
+  # Diffusers DDPMScheduler
+  scheduler:
+    num_train_timesteps: 2000
+    beta_schedule: cosine
+    beta_start: 0.000001
+    beta_end: 0.01
+
+train:
+  n_iter: 1000000
+  val_freq: 10000
+  save_checkpoint_freq: 10000
+  print_freq: 100
+  optimizer:
+    type: adamw
+    lr: 0.00001
+
+wandb:
+  project: ddpm-RS-unet

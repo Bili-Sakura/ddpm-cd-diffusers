@@ -1,0 +1,97 @@
+# LEVIR-CD change-detection fine-tuning configuration
+
+name: ddpm-RS-CDHead-LEVIR
+phase: train    # train | test
+gpu_ids: [0]
+
+path:
+  log: logs
+  tb_logger: tb_logger
+  results: results
+  checkpoint: checkpoint
+  # Path to a pre-trained diffusion model saved with DiffusionFeatureExtractor.save_pretrained()
+  resume_state: null  # e.g. experiments/ddpm-RS-Unet_xxx/checkpoint/best_model
+
+path_cd:
+  log: logs
+  tb_logger: tb_logger
+  results: results
+  checkpoint: checkpoint
+  resume_state: null  # e.g. experiments/ddpm-RS-CDHead_xxx/checkpoint/best_cd_model
+
+datasets:
+  train:
+    name: LEVIR-CD-256
+    dataroot: dataset/LEVIR-CD256
+    resolution: 256
+    batch_size: 8
+    num_workers: 8
+    use_shuffle: true
+    data_len: -1
+  val:
+    name: LEVIR-CD-256
+    dataroot: dataset/LEVIR-CD256
+    resolution: 256
+    batch_size: 4
+    num_workers: 8
+    use_shuffle: true
+    data_len: -1
+  test:
+    name: LEVIR-CD-256
+    dataroot: dataset/LEVIR-CD256
+    resolution: 256
+    batch_size: 4
+    num_workers: 8
+    use_shuffle: false
+    data_len: -1
+
+model_cd:
+  # Indices of usable up_block outputs (0 = shallowest / full-resolution,
+  # 3 = deepest for a 5-level UNet — the final no-upsample block is excluded).
+  feat_scales: [0, 1, 2, 3]
+  out_channels: 2          # binary: change / no-change
+  loss_type: ce
+  output_cm_size: 256
+  t: [50, 100, 400]        # diffusion timesteps for feature extraction
+
+model:
+  unet:
+    sample_size: 256
+    in_channels: 3
+    out_channels: 3
+    layers_per_block: 2
+    block_out_channels: [128, 256, 512, 1024, 1024]
+    down_block_types:
+      - DownBlock2D
+      - DownBlock2D
+      - AttnDownBlock2D
+      - AttnDownBlock2D
+      - AttnDownBlock2D
+    up_block_types:
+      - AttnUpBlock2D
+      - AttnUpBlock2D
+      - AttnUpBlock2D
+      - UpBlock2D
+      - UpBlock2D
+    norm_num_groups: 32
+  scheduler:
+    num_train_timesteps: 2000
+    beta_schedule: linear
+    beta_start: 0.000001
+    beta_end: 0.01
+
+train:
+  n_epoch: 120
+  train_print_freq: 500
+  val_freq: 1
+  val_print_freq: 50
+  optimizer:
+    type: adam
+    lr: 0.0001
+  scheduler:
+    lr_policy: linear   # linear | step
+    n_steps: 3
+    gamma: 0.1
+
+wandb:
+  project: ddpm-RS-CDHead
