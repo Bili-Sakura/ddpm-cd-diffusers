@@ -1,18 +1,18 @@
 import torch
-import data as Data
-import model as Model
+import src.datasets as Data
+import src.pipelines as Model
 import argparse
 import logging
-import core.logger as Logger
-import core.metrics as Metrics
-from core.wandb_logger import WandbLogger
+import libs.logger as Logger
+import libs.metrics as Metrics
+from libs.wandb_logger import WandbLogger
 from tensorboardX import SummaryWriter
 import os
 import numpy as np
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, default='config/ddpm_train.json',
+    parser.add_argument('-c', '--config', type=str, default='configs/ddpm_train.json',
                         help='JSON file for configuration')
     parser.add_argument('-p', '--phase', type=str, choices=['train', 'val'],
                         help='Run either train(training) or val(generation)', default='train')
@@ -59,9 +59,6 @@ if __name__ == "__main__":
                 train_set, dataset_opt, phase)
         elif phase == 'val':
             print("Unconditional Sampling. No validation dataloader required.")
-            # val_set = Data.create_dataset(dataset_opt, phase)
-            # val_loader = Data.create_dataloader(
-            # val_set, dataset_opt, phase)
     logger.info('Initial Dataset Finished')
 
     # model

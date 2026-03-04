@@ -38,7 +38,7 @@ def create_cd_dataloader(dataset, dataset_opt, phase):
 def create_image_dataset(dataset_opt, phase):
     '''create dataset'''
     mode = dataset_opt['mode']
-    from data.ImageDataset import ImageDataset as D
+    from src.datasets.image_dataset import ImageDataset as D
     dataset = D(dataroot=dataset_opt['dataroot'],
                 resolution=dataset_opt['resolution'],
                 split=phase,
@@ -53,7 +53,7 @@ def create_image_dataset(dataset_opt, phase):
 def create_cd_dataset(dataset_opt, phase):
     '''create dataset'''
     mode = dataset_opt['mode']
-    from data.CDDataset import CDDataset as D
+    from src.datasets.cd_dataset import CDDataset as D
     dataset = D(dataroot=dataset_opt['dataroot'],
                 resolution=dataset_opt['resolution'],
                 split=phase,

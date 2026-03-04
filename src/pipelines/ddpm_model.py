@@ -4,7 +4,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import os
-import model.networks as networks
+import src.pipelines.networks as networks
 from .base_model import BaseModel
 logger = logging.getLogger('base')
 

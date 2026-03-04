@@ -4,10 +4,10 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import os
-import model.networks as networks
+import src.pipelines.networks as networks
 from .base_model import BaseModel
-from misc.metric_tools import ConfuseMatrixMeter
-from misc.torchutils import get_scheduler
+from libs.metric_tools import ConfuseMatrixMeter
+from libs.torchutils import get_scheduler
 logger = logging.getLogger('base')
 
 
@@ -191,7 +191,6 @@ class CD(BaseModel):
 
         for k, v in scores.items():
             self.log_dict[k] = v
-            #message += '%s: %.5f ' % (k, v)
 
     # Rest all the performance metrics
     def _clear_cache(self):

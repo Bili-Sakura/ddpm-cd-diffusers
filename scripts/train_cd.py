@@ -1,20 +1,18 @@
 import torch
-import data as Data
-import model as Model
+import src.datasets as Data
+import src.pipelines as Model
 import argparse
 import logging
-import core.logger as Logger
-import core.metrics as Metrics
-from core.wandb_logger import WandbLogger
+import libs.logger as Logger
+import libs.metrics as Metrics
+from libs.wandb_logger import WandbLogger
 from tensorboardX import SummaryWriter
 import os
 import numpy as np
-from model.cd_modules.cd_head import cd_head 
-from misc.print_diffuse_feats import print_feats
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, default='config/ddpm_cd.json',
+    parser.add_argument('-c', '--config', type=str, default='configs/levir.json',
                         help='JSON file for configuration')
     parser.add_argument('-p', '--phase', type=str, choices=['train', 'test'],
                         help='Run either train(training + validation) or testing', default='train')
@@ -120,22 +118,15 @@ if __name__ == "__main__":
                 f_A=[]
                 f_B=[]
                 for t in opt['model_cd']['t']:
-                    fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t) #np.random.randint(low=2, high=8)
+                    fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t)
                     if opt['model_cd']['feat_type'] == "dec":
                         f_A.append(fd_A_t)
                         f_B.append(fd_B_t)
-                        # Uncommet the following line to visualize features from the diffusion model
-                        # for level in range(0, len(fd_A_t)):
-                        #     print_feats(opt=opt, train_data=train_data, feats_A=fd_A_t, feats_B=fd_B_t, level=level, t=t)
-                        # del fe_A_t, fe_B_t
                     else:
                         f_A.append(fe_A_t)
                         f_B.append(fe_B_t)
                         del fd_A_t, fd_B_t
                 
-                # for i in range(0, len(fd_A)):
-                #     print(fd_A[i].shape)
-
                 # Feeding features from the diffusion model to the CD model
                 change_detection.feed_data(f_A, f_B, train_data)
                 change_detection.optimize_parameters()
@@ -222,7 +213,7 @@ if __name__ == "__main__":
                     f_A=[]
                     f_B=[]
                     for t in opt['model_cd']['t']:
-                        fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t) #np.random.randint(low=2, high=8)
+                        fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t)
                         if opt['model_cd']['feat_type'] == "dec":
                             f_A.append(fd_A_t)
                             f_B.append(fd_B_t)
@@ -329,7 +320,7 @@ if __name__ == "__main__":
             f_A=[]
             f_B=[]
             for t in opt['model_cd']['t']:
-                fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t) #np.random.randint(low=2, high=8)
+                fe_A_t, fd_A_t, fe_B_t, fd_B_t = diffusion.get_feats(t=t)
                 if opt['model_cd']['feat_type'] == "dec":
                     f_A.append(fd_A_t)
                     f_B.append(fd_B_t)
