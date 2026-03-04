@@ -26,8 +26,44 @@
 
 > We fine-tune a lightweight change classifier utilizing the feature representations produced by the pre-trained DDPM alongside change labels
 
-## 3. Usage
-### 3.1 Requirements
+## 3. Project Structure
+
+```
+ddpm-cd-diffusers/
+├── configs/               # JSON configuration files for all datasets
+├── scripts/               # Entry-point training / evaluation scripts
+│   ├── train_cd.py        # Change detection fine-tuning & testing
+│   └── train_ddpm.py      # DDPM pre-training
+├── src/
+│   ├── models/            # Model definitions
+│   │   ├── unet.py        # SR3-style UNet with feature-extraction support
+│   │   ├── networks.py    # Factory functions for UNet & CD head
+│   │   ├── base_model.py  # Abstract base class for models
+│   │   └── cd_modules/    # Change detection head modules
+│   │       ├── cd_head.py
+│   │       ├── cd_head_v2.py
+│   │       ├── psp.py
+│   │       ├── se.py
+│   │       └── upsample.py
+│   ├── pipelines/         # Training / inference pipelines
+│   │   ├── ddpm_pipeline.py   # GaussianDiffusion + DDPM (uses DDPMScheduler)
+│   │   └── cd_pipeline.py     # Change Detection model wrapper
+│   └── datasets/          # Dataset classes and data utilities
+│       ├── cd_dataset.py
+│       ├── image_dataset.py
+│       ├── utils.py
+│       └── prepare_data.py
+└── libs/                  # Shared utility libraries
+    ├── logger.py
+    ├── metrics.py
+    ├── wandb_logger.py
+    ├── metric_tools.py
+    ├── torchutils.py
+    └── print_diffuse_feats.py
+```
+
+## 4. Usage
+### 4.1 Requirements
 Before using this repository, make sure you have the following prerequisites installed:
 
 - [Anaconda](https://www.anaconda.com/download/)
@@ -38,21 +74,16 @@ You can install PyTorch with the following [command](https://pytorch.org/get-sta
 conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
 ```
 
-### 3.2 Installation
+### 4.2 Installation
 
 To get started, clone this repository:
 ```bash
-git clone https://github.com/wgcban/ddpm-cd.git
+git clone https://github.com/Bili-Sakura/ddpm-cd-diffusers.git
 ```
 
-Next, create the [conda](https://docs.conda.io/projects/conda/en/stable/) environment named `ddpm-cd` by executing the following command:
+Install dependencies (includes HuggingFace diffusers):
 ```bash
-conda env create -f environment.yml
-```
-
-Then activate the environment:
-```bash
-conda activate ddpm-cd
+pip install -r requirements.txt
 ```
 
 Download the datasets and place them in the `dataset` folder. **->[See Section 5.1 for download links.](https://github.com/wgcban/ddpm-cd/tree/master#51-download-the-change-detection-datasets)**
@@ -61,30 +92,30 @@ If you wish to only test, download the pre-trained DDPM and fine-tuned DDPM-CD m
 
 All the train-val-test statistics will be automatically upload to [`wandb`](https://wandb.ai/home), and please refer [`wandb-quick-start`](https://wandb.ai/quickstart?utm_source=app-resource-center&utm_medium=app&utm_term=quickstart) documentation if you are not familiar with using `wandb`. 
 
-## 4. Pre-training DDPM
-### 4.1 Collect off-the-shelf remote sensing data to train diffusion model
+## 5. Pre-training DDPM
+### 5.1 Collect off-the-shelf remote sensing data to train diffusion model
 
 Dump all the remote sensing data sampled from Google Earth Engine and any other publically available remote sensing images to dataset folder or create a [simlink](https://www.geeksforgeeks.org/python-os-symlink-method/). 
 
-### 4.2 Pre-train/resume (unconditional) DDPM
+### 5.2 Pre-train/resume (unconditional) DDPM
 
 We use `ddpm_train.json` to setup the configurations. Update the dataset `name` and `dataroot` in the json file. Then run the following command to start training the diffusion model. The results and log files will be save to ``experiments`` folder. Also, we upload all the metrics to [wandb](https://wandb.ai/home).
 
 ```python
-python ddpm_train.py --config config/ddpm_train.json -enable_wandb -log_eval
+python scripts/train_ddpm.py --config configs/ddpm_train.json -enable_wandb -log_eval
 ```
 
 In case, if you want to resume the training from previosely saved point, provide the path to saved model in ``path/resume_state``, else keep it as `null`.
 
-### 4.3 Sampling from the pre-trained DDPM
+### 5.3 Sampling from the pre-trained DDPM
 If you want generate samples from the pre-trained DDPM, first update the path to trained diffusion model in [`path`][`resume_state`]. Then run the following command.
 ```python
-python ddpm_train.py --config config/ddpm_sampling.json --phase val
+python scripts/train_ddpm.py --config configs/ddpm_sampling.json --phase val
 ```
 The generated images will be saved in `experiments`.
 
-## 5. Fine-tuning for change detection
-### 5.1 Download the change detection datasets
+## 6. Fine-tuning for change detection
+### 6.1 Download the change detection datasets
 Download the change detection datasets from the following links. Place them inside your `datasets` folder.
 
 - [`LEVIR-CD`](https://www.dropbox.com/s/18fb5jo0npu5evm/LEVIR-CD256.zip?dl=0)
@@ -95,57 +126,57 @@ Download the change detection datasets from the following links. Place them insi
 
 Then, update the paths to those folders here [`datasets`][`train`][`dataroot`], [`datasets`][`val`][`dataroot`], [`datasets`][`test`][`dataroot`] in `levir.json`, `whu.json`, `dsifn.json`, and `cdd.json`.
 
-### 5.2 Provide the path to pre-trained diffusion model
+### 6.2 Provide the path to pre-trained diffusion model
 Udate the path to pre-trained diffusion model weights (`*_gen.pth` and `*_opt.pth`) here [`path`][`resume_state`] in `levir.json`, `whu.json`, `dsifn.json`, and `cdd.json`..
 
-### 5.3 Indicate time-steps used for feature extraction
+### 6.3 Indicate time-steps used for feature extraction
 Indicate the time-steps using to extract feature representations in [`model_cd`][`t`]. As shown in the ablation section of the paper, our best model is obtained with time-steps: {50,100,400}. However, time-steps of {50,100} works well too.
 
-### 5.4 Start fine-tuning for change detection
+### 6.4 Start fine-tuning for change detection
 Run the following code to start the training.
 - Training on LEVIR-CD:
     ```python
-    python ddpm_cd.py --config config/levir.json -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/levir.json -enable_wandb -log_eval
     ```
 - Training on WHU-CD:
     ```python
-    python ddpm_cd.py --config config/whu.json -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/whu.json -enable_wandb -log_eval
     ```
 - Training on DSIFN-CD:
     ```python
-    python ddpm_cd.py --config config/dsifn.json -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/dsifn.json -enable_wandb -log_eval
     ```
 - Training on CDD:
     ```python
-    python ddpm_cd.py --config config/cdd.json -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/cdd.json -enable_wandb -log_eval
     ```
 
 The results will be saved in `experiments` and also upload to `wandb`.
 
-## 6. Testing
+## 7. Testing
 To obtain the predictions and performance metrics (IoU, F1, and OA), first provide the path to pre-trained diffusion model here [`path`][`resume_state`] and path to trained change detection model (the best model) here [`path_cd`][`resume_state`] in `levir_test.json`, `whu_test.json`, `dsifn_test.json`, and `cdd_test.json`. Also make sure you specify the time steps used in fine-tuning here: [`model_cd`][`t`].
 
 Run the following code to start the training.
 - Test on LEVIR-CD:
     ```python
-    python ddpm_cd.py --config config/levir_test.json --phase test -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/levir_test.json --phase test -enable_wandb -log_eval
     ```
 - Test on WHU-CD:
     ```python
-    python ddpm_cd.py --config config/whu_test.json --phase test -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/whu_test.json --phase test -enable_wandb -log_eval
     ```
 - Test on DSIFN-CD:
     ```python
-    python ddpm_cd.py --config config/dsifn_test.json --phase test -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/dsifn_test.json --phase test -enable_wandb -log_eval
     ```
 - Test on CDD:
     ```python
-    python ddpm_cd.py --config config/cdd_test.json --phase test -enable_wandb -log_eval
+    python scripts/train_cd.py --config configs/cdd_test.json --phase test -enable_wandb -log_eval
     ```
 
 Predictions will be saved in `experiments` and performance metrics will be uploaded to wandb.
 
-## 7. Links to download pre-trained models
+## 8. Links to download pre-trained models
 ### 7.1 Pre-trianed DDPM
 Pre-trained diffusion model can be download from: [`Dropbox`](https://www.dropbox.com/sh/z6k5ixlhkpwgzt5/AAApBOGEUhHa4qZon0MxUfmua?dl=0)
 
@@ -184,7 +215,7 @@ Fine-tunes chande detection networks can be download from following links:
 ### 7.4 Test results on `wandb`
 - [`LEVIR-WHU-DSIFN-CDD-Test-Results`](https://wandb.ai/wgcban/ddpm-RS-CDHead/reports/Change-Detection-Performance-on-Test-sets-of-LEVIR-CD-WHU-CD-DSIFN-CD-and-CDD--VmlldzoyMDE5NDg5?accessToken=6eikgovmk7ct25ar00eggsuslh8bzdz9e8215qn5xa0omqe5uo5u1jf4lh2liajx)
 
-## 8. Results
+## 9. Results
 ### 8.1 Quantitative
 ![image-20210228153142126](./imgs/results.png)
 

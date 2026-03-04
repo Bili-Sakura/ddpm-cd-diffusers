@@ -1,0 +1,14 @@
+torch>=1.11.0
+torchvision
+numpy
+pandas
+tqdm
+opencv-python
+pillow
+tensorboardx
+wandb
+diffusers>=0.20.0
+transformers>=4.25.0
+accelerate>=0.20.0
+thop
+scipy
