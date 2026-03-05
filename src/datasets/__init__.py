@@ -1,66 +1,54 @@
-'''create dataset and dataloader'''
+"""Dataset and dataloader factories."""
+
 import logging
-from re import split
 import torch.utils.data
+
+from src.datasets.image_dataset import ImageDataset
+from src.datasets.cd_dataset import CDDataset
+
+logger = logging.getLogger(__name__)
 
 
 def create_dataloader(dataset, dataset_opt, phase):
-    '''create dataloader '''
-    if phase == 'train':
+    """Create a PyTorch DataLoader."""
+    if phase == "train":
         return torch.utils.data.DataLoader(
             dataset,
-            batch_size=dataset_opt['batch_size'],
-            shuffle=dataset_opt['use_shuffle'],
-            num_workers=dataset_opt['num_workers'],
-            pin_memory=True)
-    elif phase == 'val':
-        return torch.utils.data.DataLoader(
-            dataset, batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
+            batch_size=dataset_opt["batch_size"],
+            shuffle=dataset_opt.get("use_shuffle", True),
+            num_workers=dataset_opt.get("num_workers", 4),
+            pin_memory=True,
+        )
     else:
-        raise NotImplementedError(
-            'Dataloader [{:s}] is not found.'.format(phase))
-
-#Create CD dataloader
-def create_cd_dataloader(dataset, dataset_opt, phase):
-    '''create dataloader '''
-    if phase in ('train', 'val', 'test'):
         return torch.utils.data.DataLoader(
             dataset,
-            batch_size=dataset_opt['batch_size'],
-            shuffle=dataset_opt['use_shuffle'],
-            num_workers=dataset_opt['num_workers'],
-            pin_memory=True)
-    else:
-        raise NotImplementedError(
-            'Dataloader [{:s}] is not found.'.format(phase))
+            batch_size=dataset_opt.get("batch_size", 1),
+            shuffle=False,
+            num_workers=dataset_opt.get("num_workers", 1),
+            pin_memory=True,
+        )
 
-# Create image dataset
+
 def create_image_dataset(dataset_opt, phase):
-    '''create dataset'''
-    mode = dataset_opt['mode']
-    from src.datasets.image_dataset import ImageDataset as D
-    dataset = D(dataroot=dataset_opt['dataroot'],
-                resolution=dataset_opt['resolution'],
-                split=phase,
-                data_len=dataset_opt['data_len']
-                )
-    logger = logging.getLogger('base')
-    logger.info('Dataset [{:s} - {:s}] is created.'.format(dataset.__class__.__name__,
-                                                           dataset_opt['name']))
+    """Create an :class:`ImageDataset` for unconditional DDPM pre-training."""
+    dataset = ImageDataset(
+        dataroot=dataset_opt["dataroot"],
+        resolution=dataset_opt["resolution"],
+        split=phase,
+        data_len=dataset_opt.get("data_len", -1),
+    )
+    logger.info(f"Created ImageDataset [{dataset_opt.get('name', '')}] with {len(dataset)} samples.")
     return dataset
 
-# Create change-detection dataset
+
 def create_cd_dataset(dataset_opt, phase):
-    '''create dataset'''
-    mode = dataset_opt['mode']
-    from src.datasets.cd_dataset import CDDataset as D
-    dataset = D(dataroot=dataset_opt['dataroot'],
-                resolution=dataset_opt['resolution'],
-                split=phase,
-                data_len=dataset_opt['data_len']
-                )
-    logger = logging.getLogger('base')
-    logger.info('Dataset [{:s} - {:s} - {:s}] is created.'.format(dataset.__class__.__name__,
-                                                           dataset_opt['name'],
-                                                           phase))
+    """Create a :class:`CDDataset` for change-detection fine-tuning."""
+    dataset = CDDataset(
+        dataroot=dataset_opt["dataroot"],
+        resolution=dataset_opt["resolution"],
+        split=phase,
+        data_len=dataset_opt.get("data_len", -1),
+    )
+    logger.info(f"Created CDDataset [{dataset_opt.get('name', '')} / {phase}] with {len(dataset)} samples.")
     return dataset
+

@@ -10,41 +10,36 @@
 ### Updates:
 - 🎉 DDPM-CD has been accepted at IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) 2025.
 - :exclamation: Paper-v3: We have (completely) revised the wrting of our paper. Please refer to [v3 on arxiv](https://arxiv.org/abs/2206.11892v3). 
-- 🔧 **Refactored** project structure to standard ML layout using [HuggingFace Diffusers](https://github.com/huggingface/diffusers) (`DDPMScheduler`). Removed `thop`/`mmcv` dependencies.
+- 🔧 **Refactored** to follow [HuggingFace Diffusers](https://github.com/huggingface/diffusers) best practices:
+  - UNet uses `ModelMixin` / `ConfigMixin` → supports `save_pretrained()` / `from_pretrained()`
+  - `DDPMScheduler` for noise scheduling (no custom schedule code)
+  - `DDPMCDPipeline` (`DiffusionPipeline` subclass) for inference
+  - Training scripts use `accelerate` (distributed training, mixed precision)
+  - CLI args via `argparse` (like diffusers examples) instead of JSON configs
+  - Removed `thop`/`mmcv`/`tensorboardX` dependencies
 
 ## Project Structure
 ```
 ddpm-cd-diffusers/
 ├── src/
-│   ├── models/              # Model definitions
-│   │   ├── unet.py          # SR3 UNet (with feat_need for feature extraction)
-│   │   ├── diffusion.py     # GaussianDiffusion (uses diffusers.DDPMScheduler)
-│   │   └── cd_modules/      # Change detection heads (cd_head, cd_head_v2, psp, se)
-│   ├── pipelines/           # Training/inference pipelines
-│   │   ├── base_model.py    # Base model class
-│   │   ├── ddpm_model.py    # DDPM training pipeline
-│   │   ├── cd_model.py      # Change detection pipeline
-│   │   └── networks.py      # Network factory (define_G, define_CD)
-│   └── datasets/            # Dataset handling
-│       ├── image_dataset.py # Raw image dataset (DDPM pre-training)
-│       ├── cd_dataset.py    # Change detection dataset (paired images + labels)
-│       └── util.py          # Data utilities
-├── scripts/                 # Entry point scripts
-│   ├── train_ddpm.py        # Pre-train diffusion model
-│   └── train_cd.py          # Fine-tune change detection
-├── libs/                    # Utility libraries
-│   ├── logger.py            # Logging & config parsing
-│   ├── metrics.py           # Image metrics (PSNR, SSIM, tensor2img)
-│   ├── metric_tools.py      # Confusion matrix, F1, IoU
-│   ├── torchutils.py        # LR schedulers
-│   ├── wandb_logger.py      # W&B integration
-│   └── print_diffuse_feats.py # Feature visualization
-├── configs/                 # Configuration files (JSON)
-│   ├── ddpm_train.json      # DDPM pre-training config
-│   ├── levir.json           # LEVIR-CD training config
-│   ├── whu.json             # WHU-CD training config
+│   ├── models/                # Model definitions
+│   │   ├── unet.py            # SR3 UNet (ModelMixin — save_pretrained/from_pretrained)
+│   │   ├── diffusion.py       # Diffusion utilities (DDPMScheduler, q_sample, extract_features)
+│   │   └── cd_modules/        # Change detection heads (cd_head_v2, psp, se)
+│   ├── pipelines/             # DiffusionPipeline subclasses
+│   │   └── ddpm_cd_pipeline.py  # DDPMCDPipeline for inference
+│   └── datasets/              # Dataset handling
+│       ├── image_dataset.py   # Raw image dataset (DDPM pre-training)
+│       ├── cd_dataset.py      # Change detection dataset (paired images + labels)
+│       └── util.py            # Data utilities
+├── scripts/                   # Entry point scripts (diffusers examples style)
+│   ├── train_ddpm.py          # Pre-train DDPM (accelerate launch)
+│   └── train_cd.py            # Fine-tune CD head (accelerate launch)
+├── libs/                      # Utility libraries
+│   ├── metric_tools.py        # Confusion matrix, F1, IoU
 │   └── ...
-├── requirement.txt          # Python dependencies
+├── configs/                   # Legacy JSON configs (reference only)
+├── requirement.txt            # Python dependencies
 └── README.md
 ```
 
@@ -82,13 +77,14 @@ To get started, clone this repository:
 git clone https://github.com/wgcban/ddpm-cd.git
 ```
 
-Next, create the [conda](https://docs.conda.io/projects/conda/en/stable/) environment named `ddpm-cd` by executing the following command:
+Install dependencies:
 ```bash
-conda env create -f environment.yml
+pip install -r requirement.txt
 ```
 
-Then activate the environment:
+Or create the [conda](https://docs.conda.io/projects/conda/en/stable/) environment:
 ```bash
+conda env create -f environment.yml
 conda activate ddpm-cd
 ```
 
@@ -107,16 +103,43 @@ Dump all the remote sensing data sampled from Google Earth Engine and any other 
 
 We use `ddpm_train.json` to setup the configurations. Update the dataset `name` and `dataroot` in the json file. Then run the following command to start training the diffusion model. The results and log files will be save to ``experiments`` folder. Also, we upload all the metrics to [wandb](https://wandb.ai/home).
 
-```python
-python scripts/train_ddpm.py --config configs/ddpm_train.json -enable_wandb -log_eval
+**New (diffusers style with `accelerate`):**
+```bash
+accelerate launch scripts/train_ddpm.py \
+    --train_data_dir dataset/Million-AID-LWD \
+    --output_dir experiments/ddpm-pretrain \
+    --resolution 256 \
+    --train_batch_size 8 \
+    --num_train_steps 1000000 \
+    --learning_rate 1e-5 \
+    --ddpm_num_steps 2000 \
+    --ddpm_beta_schedule cosine \
+    --save_model_steps 10000 \
+    --logger wandb
 ```
 
-In case, if you want to resume the training from previosely saved point, provide the path to saved model in ``path/resume_state``, else keep it as `null`.
+Or run directly without accelerate:
+```bash
+python scripts/train_ddpm.py \
+    --train_data_dir dataset/Million-AID-LWD \
+    --output_dir experiments/ddpm-pretrain \
+    --resolution 256
+```
+
+In case, if you want to resume the training from previosely saved point, use `--resume_from_checkpoint`:
+```bash
+accelerate launch scripts/train_ddpm.py \
+    --train_data_dir dataset/Million-AID-LWD \
+    --output_dir experiments/ddpm-pretrain \
+    --resume_from_checkpoint experiments/ddpm-pretrain/checkpoint-50000
+```
 
 ### 4.3 Sampling from the pre-trained DDPM
-If you want generate samples from the pre-trained DDPM, first update the path to trained diffusion model in [`path`][`resume_state`]. Then run the following command.
+The pre-trained model is saved in diffusers format via ``save_pretrained``. You can load and sample:
 ```python
-python scripts/train_ddpm.py --config configs/ddpm_sampling.json --phase val
+from src.pipelines import DDPMCDPipeline
+pipe = DDPMCDPipeline.from_pretrained("experiments/ddpm-pretrain")
+images = pipe.generate(batch_size=4, image_size=256)
 ```
 The generated images will be saved in `experiments`.
 
@@ -133,52 +156,99 @@ Download the change detection datasets from the following links. Place them insi
 Then, update the paths to those folders here [`datasets`][`train`][`dataroot`], [`datasets`][`val`][`dataroot`], [`datasets`][`test`][`dataroot`] in `configs/levir.json`, `configs/whu.json`, `configs/dsifn.json`, and `configs/cdd.json`.
 
 ### 5.2 Provide the path to pre-trained diffusion model
-Udate the path to pre-trained diffusion model weights (`*_gen.pth` and `*_opt.pth`) here [`path`][`resume_state`] in `configs/levir.json`, `configs/whu.json`, `configs/dsifn.json`, and `configs/cdd.json`..
+Provide the path to the pre-trained UNet (saved via `save_pretrained` in diffusers format, or a raw `_gen.pth` weights file).
 
 ### 5.3 Indicate time-steps used for feature extraction
-Indicate the time-steps using to extract feature representations in [`model_cd`][`t`]. As shown in the ablation section of the paper, our best model is obtained with time-steps: {50,100,400}. However, time-steps of {50,100} works well too.
+Indicate the time-steps using to extract feature representations via `--timesteps`. As shown in the ablation section of the paper, our best model is obtained with time-steps: {50,100,400}. However, time-steps of {50,100} works well too.
 
 ### 5.4 Start fine-tuning for change detection
-Run the following code to start the training.
-- Training on LEVIR-CD:
-    ```python
-    python scripts/train_cd.py --config configs/levir.json -enable_wandb -log_eval
-    ```
-- Training on WHU-CD:
-    ```python
-    python scripts/train_cd.py --config configs/whu.json -enable_wandb -log_eval
-    ```
-- Training on DSIFN-CD:
-    ```python
-    python scripts/train_cd.py --config configs/dsifn.json -enable_wandb -log_eval
-    ```
-- Training on CDD:
-    ```python
-    python scripts/train_cd.py --config configs/cdd.json -enable_wandb -log_eval
-    ```
+**New (diffusers style with `accelerate`):**
+```bash
+# LEVIR-CD
+accelerate launch scripts/train_cd.py \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --train_data_dir dataset/LEVIR-CD256 \
+    --val_data_dir dataset/LEVIR-CD256 \
+    --output_dir experiments/cd-levir \
+    --resolution 256 \
+    --train_batch_size 8 \
+    --num_epochs 120 \
+    --learning_rate 1e-4 \
+    --timesteps 50 100 400 \
+    --feat_type dec \
+    --logger wandb
+
+# WHU-CD
+accelerate launch scripts/train_cd.py \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --train_data_dir dataset/WHU-CD-256 \
+    --val_data_dir dataset/WHU-CD-256 \
+    --output_dir experiments/cd-whu \
+    --timesteps 50 100 400 \
+    --logger wandb
+
+# DSIFN-CD
+accelerate launch scripts/train_cd.py \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --train_data_dir dataset/DSIFN-CD-256 \
+    --val_data_dir dataset/DSIFN-CD-256 \
+    --output_dir experiments/cd-dsifn \
+    --timesteps 50 100 400 \
+    --logger wandb
+
+# CDD
+accelerate launch scripts/train_cd.py \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --train_data_dir dataset/CDD \
+    --val_data_dir dataset/CDD \
+    --output_dir experiments/cd-cdd \
+    --timesteps 50 100 400 \
+    --logger wandb
+```
 
 The results will be saved in `experiments` and also upload to `wandb`.
 
 ## 6. Testing
-To obtain the predictions and performance metrics (IoU, F1, and OA), first provide the path to pre-trained diffusion model here [`path`][`resume_state`] and path to trained change detection model (the best model) here [`path_cd`][`resume_state`] in `configs/levir_test.json`, `configs/whu_test.json`, `configs/dsifn_test.json`, and `configs/cdd_test.json`. Also make sure you specify the time steps used in fine-tuning here: [`model_cd`][`t`].
+To obtain the predictions and performance metrics (IoU, F1, and OA), provide the path to the pre-trained DDPM and the fine-tuned CD head weights:
 
-Run the following code to start the training.
-- Test on LEVIR-CD:
-    ```python
-    python scripts/train_cd.py --config configs/levir_test.json --phase test -enable_wandb -log_eval
-    ```
-- Test on WHU-CD:
-    ```python
-    python scripts/train_cd.py --config configs/whu_test.json --phase test -enable_wandb -log_eval
-    ```
-- Test on DSIFN-CD:
-    ```python
-    python scripts/train_cd.py --config configs/dsifn_test.json --phase test -enable_wandb -log_eval
-    ```
-- Test on CDD:
-    ```python
-    python scripts/train_cd.py --config configs/cdd_test.json --phase test -enable_wandb -log_eval
-    ```
+```bash
+# Test on LEVIR-CD
+python scripts/train_cd.py \
+    --phase test \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --resume_cd_weights experiments/cd-levir/checkpoints/best_cd_model.pth \
+    --train_data_dir dataset/LEVIR-CD256 \
+    --test_data_dir dataset/LEVIR-CD256 \
+    --timesteps 50 100 400 \
+    --feat_type dec
+
+# Test on WHU-CD
+python scripts/train_cd.py \
+    --phase test \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --resume_cd_weights experiments/cd-whu/checkpoints/best_cd_model.pth \
+    --train_data_dir dataset/WHU-CD-256 \
+    --test_data_dir dataset/WHU-CD-256 \
+    --timesteps 50 100 400
+
+# Test on DSIFN-CD
+python scripts/train_cd.py \
+    --phase test \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --resume_cd_weights experiments/cd-dsifn/checkpoints/best_cd_model.pth \
+    --train_data_dir dataset/DSIFN-CD-256 \
+    --test_data_dir dataset/DSIFN-CD-256 \
+    --timesteps 50 100 400
+
+# Test on CDD
+python scripts/train_cd.py \
+    --phase test \
+    --pretrained_model_path experiments/ddpm-pretrain/unet \
+    --resume_cd_weights experiments/cd-cdd/checkpoints/best_cd_model.pth \
+    --train_data_dir dataset/CDD \
+    --test_data_dir dataset/CDD \
+    --timesteps 50 100 400
+```
 
 Predictions will be saved in `experiments` and performance metrics will be uploaded to wandb.
 
