@@ -61,9 +61,19 @@ class DDPMCDPipeline(DiffusionPipeline):
             with open(os.path.join(cd_head_dir, "config.json")) as f:
                 cfg = json.load(f)
             cd_head = cd_head_v2(**cfg)
-            weight_path = os.path.join(cd_head_dir, "diffusion_pytorch_model.bin")
-            if os.path.exists(weight_path):
-                cd_head.load_state_dict(torch.load(weight_path, map_location="cpu"))
+            safetensors_path = os.path.join(cd_head_dir, "diffusion_pytorch_model.safetensors")
+            bin_path = os.path.join(cd_head_dir, "diffusion_pytorch_model.bin")
+            if os.path.exists(safetensors_path):
+                from safetensors.torch import load_file
+                cd_head.load_state_dict(load_file(safetensors_path, device="cpu"))
+            elif os.path.exists(bin_path):
+                try:
+                    state = torch.load(bin_path, map_location="cpu", weights_only=True)
+                except TypeError:
+                    state = torch.load(bin_path, map_location="cpu")
+                if hasattr(state, "state_dict"):
+                    state = state.state_dict()
+                cd_head.load_state_dict(state)
             pipe.cd_head = cd_head
         return pipe
 

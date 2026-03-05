@@ -1,6 +1,7 @@
 torch>=1.11.0
 torchvision
 diffusers>=0.25.0
+safetensors
 accelerate>=0.20.0
 numpy
 pandas
