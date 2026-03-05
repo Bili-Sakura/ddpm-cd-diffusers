@@ -129,7 +129,14 @@ def parse_args():
 
 
 def build_unet(args):
-    """Build and load the pre-trained UNet."""
+    """Build the UNet and load pre-trained weights.
+
+    Supports two loading modes:
+    1. **diffusers format** — if ``pretrained_model_path`` points to a directory
+       with ``config.json``, uses ``UNet.from_pretrained()``.
+    2. **raw state_dict** — otherwise, builds from CLI args and loads weights
+       from a ``.pth`` file (supports ``*_gen.pth`` suffix convention).
+    """
     pretrained = args.pretrained_model_path
 
     # Try diffusers from_pretrained first
