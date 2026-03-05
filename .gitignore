@@ -1,11 +1,4 @@
-.DS_Store
-#Dataset folders
-/dataset/pavia_center/*
-/dataset/cave/*
-/dataset
-/chckpoints/*
-/experiments
-link to *
+/models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

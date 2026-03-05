@@ -15,6 +15,9 @@ Usage::
 
 from typing import List, Optional, Tuple, Union
 
+import json
+import os
+
 import numpy as np
 import torch
 from diffusers import DDPMScheduler
@@ -44,6 +47,26 @@ class DDPMCDPipeline(DiffusionPipeline):
         # cd_head is optional and may not be a ModelMixin
         self.cd_head = cd_head
 
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
+        pipe = super().from_pretrained(pretrained_model_name_or_path, **kwargs)
+        pipe.cd_head = None
+        # Load cd_head if saved alongside (CD pipeline)
+        base_path = pretrained_model_name_or_path
+        if hasattr(pipe.unet, "config") and hasattr(pipe.unet.config, "_name_or_path"):
+            base_path = os.path.dirname(pipe.unet.config._name_or_path)
+        cd_head_dir = os.path.join(base_path, "cd_head")
+        if os.path.isdir(cd_head_dir):
+            from src.models.cd_modules.cd_head_v2 import cd_head_v2
+            with open(os.path.join(cd_head_dir, "config.json")) as f:
+                cfg = json.load(f)
+            cd_head = cd_head_v2(**cfg)
+            weight_path = os.path.join(cd_head_dir, "diffusion_pytorch_model.bin")
+            if os.path.exists(weight_path):
+                cd_head.load_state_dict(torch.load(weight_path, map_location="cpu"))
+            pipe.cd_head = cd_head
+        return pipe
+
     @torch.no_grad()
     def __call__(
         self,
@@ -54,10 +77,15 @@ class DDPMCDPipeline(DiffusionPipeline):
     ) -> torch.Tensor:
         """Run change-detection inference.
 
+        **Change detection does NOT run 2000 steps.** It performs 3–4 UNet forward
+        passes (one per timestep) to extract features, then passes them to the CD head.
+        Use the same ``timesteps`` the model was trained with (e.g. [50, 100, 400]).
+
         Args:
             image_A: pre-change image ``(B, 3, H, W)`` in ``[-1, 1]``.
             image_B: post-change image ``(B, 3, H, W)`` in ``[-1, 1]``.
-            timesteps: diffusion timesteps at which to extract features.
+            timesteps: diffusion timesteps at which to extract features. Must match
+                the CD model's training timesteps (e.g. [50, 100] or [50, 100, 400]).
             feat_type: ``"enc"`` or ``"dec"`` — which features to use.
 
         Returns:
@@ -100,14 +128,16 @@ class DDPMCDPipeline(DiffusionPipeline):
             batch_size: number of images to generate.
             in_channels: number of image channels.
             image_size: spatial resolution.
-            num_inference_steps: if ``None``, uses all training timesteps.
+            num_inference_steps: number of denoising steps. Default 2000 (full). Use
+                fewer (e.g. 50–250) for faster but lower-quality generation.
             generator: optional torch Generator for reproducibility.
 
         Returns:
             Generated images ``(B, C, H, W)`` in ``[-1, 1]``.
         """
         device = self.unet.device if hasattr(self.unet, 'device') else next(self.unet.parameters()).device
-        num_timesteps = self.scheduler.config.num_train_timesteps
+        num_train_steps = self.scheduler.config.num_train_timesteps
+        steps = num_inference_steps or num_train_steps
         sqrt_alphas = precompute_alpha_tables(self.scheduler)
 
         image = torch.randn(
@@ -116,17 +146,14 @@ class DDPMCDPipeline(DiffusionPipeline):
             generator=generator,
         )
 
-        self.scheduler.set_timesteps(num_inference_steps or num_timesteps)
+        self.scheduler.set_timesteps(steps)
+        timesteps = self.scheduler.timesteps  # descending [1999, ..., 0] or subsampled
 
-        for i in tqdm(reversed(range(num_timesteps)), total=num_timesteps, desc="Sampling"):
-            noise_level = torch.FloatTensor(
-                [sqrt_alphas[i + 1]]
-            ).repeat(batch_size, 1).to(device)
-
+        for t in tqdm(timesteps, total=len(timesteps), desc="Sampling"):
+            # t is integer timestep; sqrt_alphas[t+1] = noise level at t
+            idx = min(int(t) + 1, len(sqrt_alphas) - 1)
+            noise_level = torch.FloatTensor([sqrt_alphas[idx]]).repeat(batch_size, 1).to(device)
             noise_pred = self.unet(image, noise_level)
-
-            # Use scheduler step
-            self.scheduler.set_timesteps(num_timesteps)
-            image = self.scheduler.step(noise_pred, i, image).prev_sample
+            image = self.scheduler.step(noise_pred, t, image).prev_sample
 
         return image
